@@ -8,7 +8,8 @@ use Sub::Name;
 use Devel::Symdump;
 use Scalar::Util;
 
-# make sure it's loaded so that we can monkey-patch it
+# make sure they are loaded so that we can monkey-patch them
+use DBIx::Class::Schema;
 use DBIx::Class::ResultSet;
 
 sub monkeypatch(*&)
