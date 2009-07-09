@@ -11,13 +11,13 @@ use Devel::StackTrace;
 use Sub::Name;
 use Devel::Symdump;
 use Scalar::Util;
-use Tie::IxHash;
 
 use DBIx::Class::ResultSet;
 
 DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
   _search_stacktraces
-  _search_stacktraces_appended
+  _search_stacktrace_added_to_exception
+  _search_stacktrace_logged
 ));
 
 {
@@ -28,25 +28,32 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
     grep { /^DBIx::Class::ResultSet::[a-z]/ }
       Devel::Symdump->new("DBIx::Class::ResultSet")->functions;
 
-  my @search_methods =
-    grep { /^DBIx::Class::ResultSet::.*search.*/ } @all_methods;
+  my @constructor_methods = qw(
+    DBIx::Class::ResultSet::new
+    DBIx::Class::Schema::resultset
+  );
 
-  # wrap new() so that $schema->resultset(...) is remembered
-  foreach my $method (qw(DBIx::Class::ResultSet::new)) {
+  my @search_methods =
+    grep { /^DBIx::Class::ResultSet::.*(search|related_resultset|slice|page)/ }
+      @all_methods;
+
+  foreach my $method (@constructor_methods) {
     my $orig_method = \&$method;
     *$method = subname $method => sub {
-      my $class = shift;
+      my $proto = shift;
 
       my (@ret, $self);
       if (wantarray) {
-        @ret = $class->$orig_method(@_);
+        @ret = $proto->$orig_method(@_);
       } elsif (defined wantarray) {
-        $self = $class->$orig_method(@_);
+        $self = $proto->$orig_method(@_);
       } else {
-        $class->$orig_method(@_);
+        $proto->$orig_method(@_);
       }
 
-      $self->_append_to_search_stacktrace if $self;
+      $self->_search_stacktraces([
+        $self->_current_search_stacktrace
+      ]) if $self;
 
       return
         wantarray
@@ -63,6 +70,9 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
     *$method = subname $method => sub {
       my $self = shift;
 
+      my $search_stacktrace_logged = $self->_search_stacktrace_logged;
+      local $self->{_search_stacktrace_logged} = 1;
+
       my (@ret, $ret);
       if (wantarray) {
         @ret = $self->$orig_method(@_);
@@ -72,7 +82,10 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
         $self->$orig_method(@_);
       }
 
-      $self->_append_to_search_stacktrace;
+      $ret->_search_stacktraces([
+        @{$self->_search_stacktraces || []},
+        $self->_current_search_stacktrace
+      ]) if $ret && !$search_stacktrace_logged;
 
       return
         wantarray
@@ -89,41 +102,46 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
     *$method = subname $method => sub {
       my $self = shift;
 
+      # only append the search stacktraces in the outmost nested call (b/c eg.
+      # search() calls search_rs() internally)
+      my $search_stacktrace_added_to_exception =
+        Scalar::Util::blessed($self) &&
+          $self->_search_stacktrace_added_to_exception;
+      local $self->{_search_stacktrace_added_to_exception} = 1
+        if Scalar::Util::blessed($self);
+
       my $orig_throw_exception = \&DBIx::Class::Schema::throw_exception;
-      local *DBIx::Class::Schema::throw_exception = subname throw_exception => sub {
-        my $schema = shift;
+      local *DBIx::Class::Schema::throw_exception =
+        subname throw_exception => sub {
+          my $schema = shift;
 
-        if (Scalar::Util::blessed $self && $schema->stacktrace && !$self->_search_stacktraces_appended) {
-          $self->_search_stacktraces_appended(1);
-          # output only once the same caller info (b/c eg. search() calls
-          # search_rs(), so the outer caller info is added twice)
-          tie my %seen_stacktraces, 'Tie::IxHash';
-          foreach my $stacktrace (@{$self->_search_stacktraces}) {
-            @seen_stacktraces{ join("\n", map { $_->as_string } $stacktrace->frames) } = ();
+          if ($schema->stacktrace && Scalar::Util::blessed($self) &&
+              !$search_stacktrace_added_to_exception) {
+            my $stacktraces = "\n" . join("\n---\n",
+              map {
+                join("\n", map { $_->as_string } $_->frames)
+              } @{$self->_search_stacktraces}
+            );
+            $stacktraces =~ s/\n/\n  |\t/g;
+            $_[0] .= "\n[ +- Search calls:$stacktraces\n  +- ]";
           }
-          my $stacktraces = join("\n", "", keys %seen_stacktraces);
-          $stacktraces =~ s/\n/\n\t/g;
-          $_[0] .= "\nSearch calls:$stacktraces\n";
-        }
 
-        return $schema->$orig_throw_exception(@_);
-      };
+          return $schema->$orig_throw_exception(@_);
+        };
 
       return $self->$orig_method(@_);
     };
-  }
-
-  *DBIx::Class::ResultSet::_append_to_search_stacktrace = subname _append_to_search_stacktrace => sub {
-    my $self = shift;
-
-    $self->_search_stacktraces([
-      @{$self->_search_stacktraces || []},
-      Devel::StackTrace->new(
-        frame_filter => sub { shift->{caller}->[0] !~ /^DBIx::Class/ },
-        no_refs => 1,
-      ),
-    ]);
   };
+
+  *DBIx::Class::ResultSet::_current_search_stacktrace =
+    subname _current_search_stacktrace => sub {
+      my $self = shift;
+
+      return Devel::StackTrace->new(
+        ignore_class => __PACKAGE__,
+        no_refs => 1,
+      );
+    };
 }
 
 1;
