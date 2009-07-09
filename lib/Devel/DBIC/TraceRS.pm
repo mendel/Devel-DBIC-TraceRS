@@ -20,7 +20,7 @@ sub monkeypatch(*&)
   no strict 'refs';
   no warnings 'redefine';
 
-  *{$_[0]} = subname $_[0] => $_[1];
+  *{$_[0]} = subname +(ref $_[0] ? *{$_[0]} : $_[0]) => $_[1];
 }
 
 #
