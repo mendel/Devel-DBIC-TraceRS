@@ -10,6 +10,7 @@ use Sub::Name;
 use Devel::Symdump;
 use Scalar::Util;
 
+# make sure it's loaded so that we can monkey-patch it
 use DBIx::Class::ResultSet;
 
 DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
