@@ -37,7 +37,7 @@ my @constructor_methods = qw(
 );
 
 my @search_methods =
-  grep { /^DBIx::Class::ResultSet::.*(search|related_resultset|slice|page)/ }
+  grep { /^DBIx::Class::ResultSet::(search.*|related_resultset|slice|page)$/ }
     @all_methods;
 
 foreach my $method (@constructor_methods) {
