@@ -53,7 +53,7 @@ foreach my $method (@constructor_methods) {
     }
 
     $self->_tracers_stacktraces([
-      $self->_current_search_stacktrace
+      current_search_stacktrace()
     ]) if $self;
 
     return
@@ -85,7 +85,7 @@ foreach my $method (@traced_methods) {
 
     $ret->_tracers_stacktraces([
       @{$self->_tracers_stacktraces || []},
-      $self->_current_search_stacktrace
+      current_search_stacktrace()
     ]) if $ret && !$tracers_stacktrace_captured;
 
     return
@@ -136,13 +136,12 @@ foreach my $method (@all_methods) {
   };
 };
 
-monkeypatch DBIx::Class::ResultSet::_current_search_stacktrace => sub {
-  my $self = shift;
-
+sub current_search_stacktrace()
+{
   return Devel::StackTrace->new(
     ignore_class => __PACKAGE__,
     no_refs => 1,
   );
-};
+}
 
 1;
