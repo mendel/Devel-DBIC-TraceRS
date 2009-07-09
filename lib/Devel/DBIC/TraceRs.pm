@@ -131,14 +131,15 @@ foreach my $method (@all_methods) {
 
       if ($schema->stacktrace && Scalar::Util::blessed($self) &&
           !$tracers_stacktrace_appended_to_msg) {
-        my $stacktraces = "\n" . join("\n---\n",
+        my $stacktraces = join("\n---\n",
           map {
             join("\n", map { $_->as_string } $_->frames)
           } @{$self->_tracers_stacktraces}
         );
-        $stacktraces =~ s/\n/\n  | /g;
+        $stacktraces =~ s/^/  | /mg;
+
         $_[0] .= "\n"
-               . "[ +- search calls ----"
+               . "[ +- search calls ----\n"
                . "$stacktraces\n"
                . "  +------------------- ]";
       }
