@@ -122,8 +122,8 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
                 join("\n", map { $_->as_string } $_->frames)
               } @{$self->_search_stacktraces}
             );
-            $stacktraces =~ s/\n/\n  |\t/g;
-            $_[0] .= "\n[ +- Search calls:$stacktraces\n  +- ]";
+            $stacktraces =~ s/\n/\n  | /g;
+            $_[0] .= "\n[ +- search calls ----$stacktraces\n  +------------------- ]";
           }
 
           return $schema->$orig_throw_exception(@_);
