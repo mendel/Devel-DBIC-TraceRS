@@ -129,7 +129,7 @@ foreach my $method (@all_methods) {
     monkeypatch local *DBIx::Class::Schema::throw_exception => sub {
       my $schema = shift;
 
-      if ($schema->stacktrace) {
+      if (!blessed($_[0]) && $schema->stacktrace) {
         my $stacktraces = join("\n---\n",
           map {
             join("\n", map { $_->as_string } $_->frames)
