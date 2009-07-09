@@ -52,7 +52,7 @@ my @other_traced_methods = qw(
   DBIx::Class::Schema::resultset
 );
 
-# wrap all traced methods
+# wrap all traced methods so we can capture the stacktrace
 foreach my $method (@traced_resultset_methods, @other_traced_methods) {
   my $orig_method = \&$method;
   monkeypatch $method => sub {
@@ -61,6 +61,8 @@ foreach my $method (@traced_resultset_methods, @other_traced_methods) {
     my $self_isa_dbic_resultset =
       blessed($self) && $self->isa('DBIx::Class::ResultSet');
 
+    # do not capture stacktraces of nested calls to traced methods
+    # (eg. search() calls search_rs() internally)
     my $tracers_stacktrace_captured =
       $self_isa_dbic_resultset && $self->_tracers_stacktrace_captured;
     local $self->{_tracers_stacktrace_captured} = 1
@@ -118,8 +120,7 @@ foreach my $method (@all_resultset_methods) {
       return $schema->$orig_throw_exception(@_);
     } if !$self->_tracers_stacktrace_appended_to_msg;
 
-    # stop stacktrace after the outmost nested DBIx::Class::ResultSet call
-    # (b/c eg. search() calls search_rs() internally)
+    # do not append the stacktrace to the message more than once
     local $self->{_tracers_stacktrace_appended_to_msg} = 1;
 
     return $self->$orig_method(@_);
