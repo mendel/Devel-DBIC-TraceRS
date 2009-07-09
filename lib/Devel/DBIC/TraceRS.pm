@@ -41,7 +41,7 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
 ));
 
 my @all_methods =
-  grep { /^DBIx::Class::ResultSet::[a-z]/ }
+  grep { /^DBIx::Class::ResultSet::[a-z][^:]*$/ }
     Devel::Symdump->new("DBIx::Class::ResultSet")->functions;
 
 my @constructor_methods = qw(
