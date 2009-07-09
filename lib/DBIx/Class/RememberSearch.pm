@@ -87,6 +87,7 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(_search_stacktrace));
       local *DBIx::Class::Schema::throw_exception = subname throw_exception => sub {
         my $schema = shift;
 
+        #FIXME output only once the same caller info (b/c eg. search calls search_rs, and new calls in search_rw, so the outer caller info is added twice)
         $_[0] = join("\n", $_[0], map { $_->as_string } @{$self->_search_stacktrace})
           if Scalar::Util::blessed $self;
 
@@ -100,7 +101,6 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(_search_stacktrace));
   *DBIx::Class::ResultSet::_append_to_search_stacktrace = subname _append_to_search_stacktrace => sub {
     my $self = shift;
 
-    #FIXME append only once the same caller info (b/c eg. search calls search_rs, so the outer caller info is added twice)
     $self->_search_stacktrace([
       @{$self->_search_stacktrace || []},
       Devel::StackTrace->new(
