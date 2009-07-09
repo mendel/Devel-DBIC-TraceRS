@@ -126,7 +126,10 @@ foreach my $method (@all_methods) {
           } @{$self->_search_stacktraces}
         );
         $stacktraces =~ s/\n/\n  | /g;
-        $_[0] .= "\n[ +- search calls ----$stacktraces\n  +------------------- ]";
+        $_[0] .= "\n"
+               . "[ +- search calls ----"
+               . "$stacktraces\n"
+               . "  +------------------- ]";
       }
 
       return $schema->$orig_throw_exception(@_);
