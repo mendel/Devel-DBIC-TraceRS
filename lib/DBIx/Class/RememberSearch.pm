@@ -5,8 +5,6 @@ use warnings;
 
 use base qw(DBIx::Class);
 
-use Carp::Clan qw/^DBIx::Class/;
-
 use Devel::StackTrace;
 use Sub::Name;
 use Devel::Symdump;
