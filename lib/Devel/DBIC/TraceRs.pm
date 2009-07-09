@@ -1,9 +1,7 @@
-package DBIx::Class::RememberSearch;
+package Devel::DBIC::TraceRs;
 
 use strict;
 use warnings;
-
-use base qw(DBIx::Class);
 
 use Devel::StackTrace;
 use Sub::Name;
@@ -13,12 +11,6 @@ use Scalar::Util;
 # make sure it's loaded so that we can monkey-patch it
 use DBIx::Class::ResultSet;
 
-DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
-  _search_stacktraces
-  _search_stacktrace_added_to_exception
-  _search_stacktrace_logged
-));
-
 sub monkeypatch(*&)
 {
   no strict 'refs';
@@ -26,6 +18,12 @@ sub monkeypatch(*&)
 
   *{$_[0]} = subname $_[0] => $_[1];
 }
+
+DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
+  _tracers_stacktraces
+  _tracers_stacktrace_appended_to_msg
+  _tracers_stacktrace_captured
+));
 
 my @all_methods =
   grep { /^DBIx::Class::ResultSet::[a-z]/ }
@@ -36,7 +34,7 @@ my @constructor_methods = qw(
   DBIx::Class::Schema::resultset
 );
 
-my @search_methods =
+my @traced_methods =
   grep { /^DBIx::Class::ResultSet::(search.*|related_resultset|slice|page)$/ }
     @all_methods;
 
@@ -54,7 +52,7 @@ foreach my $method (@constructor_methods) {
       $proto->$orig_method(@_);
     }
 
-    $self->_search_stacktraces([
+    $self->_tracers_stacktraces([
       $self->_current_search_stacktrace
     ]) if $self;
 
@@ -68,13 +66,13 @@ foreach my $method (@constructor_methods) {
 }
 
 # wrap all search methods so that they are remembered
-foreach my $method (@search_methods) {
+foreach my $method (@traced_methods) {
   my $orig_method = \&$method;
   monkeypatch $method => sub {
     my $self = shift;
 
-    my $search_stacktrace_logged = $self->_search_stacktrace_logged;
-    local $self->{_search_stacktrace_logged} = 1;
+    my $tracers_stacktrace_captured = $self->_tracers_stacktrace_captured;
+    local $self->{_tracers_stacktrace_captured} = 1;
 
     my (@ret, $ret);
     if (wantarray) {
@@ -85,10 +83,10 @@ foreach my $method (@search_methods) {
       $self->$orig_method(@_);
     }
 
-    $ret->_search_stacktraces([
-      @{$self->_search_stacktraces || []},
+    $ret->_tracers_stacktraces([
+      @{$self->_tracers_stacktraces || []},
       $self->_current_search_stacktrace
-    ]) if $ret && !$search_stacktrace_logged;
+    ]) if $ret && !$tracers_stacktrace_captured;
 
     return
       wantarray
@@ -107,10 +105,10 @@ foreach my $method (@all_methods) {
 
     # only append the search stacktraces in the outmost nested call (b/c eg.
     # search() calls search_rs() internally)
-    my $search_stacktrace_added_to_exception =
+    my $tracers_stacktrace_appended_to_msg =
       Scalar::Util::blessed($self) &&
-        $self->_search_stacktrace_added_to_exception;
-    local $self->{_search_stacktrace_added_to_exception} = 1
+        $self->_tracers_stacktrace_appended_to_msg;
+    local $self->{_tracers_stacktrace_appended_to_msg} = 1
       if Scalar::Util::blessed($self);
 
     my $orig_throw_exception = \&DBIx::Class::Schema::throw_exception;
@@ -118,11 +116,11 @@ foreach my $method (@all_methods) {
       my $schema = shift;
 
       if ($schema->stacktrace && Scalar::Util::blessed($self) &&
-          !$search_stacktrace_added_to_exception) {
+          !$tracers_stacktrace_appended_to_msg) {
         my $stacktraces = "\n" . join("\n---\n",
           map {
             join("\n", map { $_->as_string } $_->frames)
-          } @{$self->_search_stacktraces}
+          } @{$self->_tracers_stacktraces}
         );
         $stacktraces =~ s/\n/\n  | /g;
         $_[0] .= "\n"
