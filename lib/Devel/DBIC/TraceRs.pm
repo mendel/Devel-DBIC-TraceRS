@@ -6,7 +6,7 @@ use warnings;
 use Devel::StackTrace;
 use Sub::Name;
 use Devel::Symdump;
-use Scalar::Util;
+use Scalar::Util qw(blessed);
 
 # make sure they are loaded so that we can monkey-patch them
 use DBIx::Class::Schema;
@@ -117,20 +117,19 @@ foreach my $method (@all_methods) {
   monkeypatch $method => sub {
     my $self = shift;
 
-    # only append the search stacktraces in the outmost nested call (b/c eg.
-    # search() calls search_rs() internally)
+    return $self->$orig_method(@_) unless blessed($self);
+
+    # stop stacktraces after the outmost nested DBIx::Class::ResultSet call
+    # (b/c eg.  search() calls search_rs() internally)
     my $tracers_stacktrace_appended_to_msg =
-      Scalar::Util::blessed($self) &&
         $self->_tracers_stacktrace_appended_to_msg;
-    local $self->{_tracers_stacktrace_appended_to_msg} = 1
-      if Scalar::Util::blessed($self);
+    local $self->{_tracers_stacktrace_appended_to_msg} = 1;
 
     my $orig_throw_exception = \&DBIx::Class::Schema::throw_exception;
     monkeypatch local *DBIx::Class::Schema::throw_exception => sub {
       my $schema = shift;
 
-      if ($schema->stacktrace && Scalar::Util::blessed($self) &&
-          !$tracers_stacktrace_appended_to_msg) {
+      if ($schema->stacktrace) {
         my $stacktraces = join("\n---\n",
           map {
             join("\n", map { $_->as_string } $_->frames)
@@ -145,7 +144,7 @@ foreach my $method (@all_methods) {
       }
 
       return $schema->$orig_throw_exception(@_);
-    };
+    } if !$tracers_stacktrace_appended_to_msg;
 
     return $self->$orig_method(@_);
   };
