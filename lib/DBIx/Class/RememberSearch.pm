@@ -20,7 +20,7 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
   _search_stacktrace_logged
 ));
 
-sub monkeypatch($$)
+sub monkeypatch(*&)
 {
   no strict 'refs';
   no warnings 'redefine';
@@ -136,7 +136,7 @@ foreach my $method (@all_methods) {
   };
 };
 
-monkeypatch 'DBIx::Class::ResultSet::_current_search_stacktrace' => sub {
+monkeypatch DBIx::Class::ResultSet::_current_search_stacktrace => sub {
   my $self = shift;
 
   return Devel::StackTrace->new(
