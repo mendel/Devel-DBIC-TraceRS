@@ -40,53 +40,31 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
   _tracers_stacktrace_captured
 ));
 
-my @all_methods =
+my @all_resultset_methods =
   grep { /^DBIx::Class::ResultSet::[a-z][^:]*$/ }
     Devel::Symdump->new("DBIx::Class::ResultSet")->functions;
 
-my @constructor_methods = qw(
-  DBIx::Class::ResultSet::new
+my @traced_resultset_methods =
+  grep { /^DBIx::Class::ResultSet::(new|search.*|related_resultset|slice|page)$/ }
+    @all_resultset_methods;
+
+my @other_traced_methods = qw(
   DBIx::Class::Schema::resultset
 );
 
-my @traced_methods =
-  grep { /^DBIx::Class::ResultSet::(search.*|related_resultset|slice|page)$/ }
-    @all_methods;
-
-# wrap constructors (they will be traced, but must be handled a bit differently)
-foreach my $method (@constructor_methods) {
-  my $orig_method = \&$method;
-  monkeypatch $method => sub {
-    my $proto = shift;
-
-    my (@ret, $self);
-    if (wantarray) {
-      @ret = $proto->$orig_method(@_);
-    } elsif (defined wantarray) {
-      $self = $proto->$orig_method(@_);
-    } else {
-      $proto->$orig_method(@_);
-    }
-
-    $self->_tracers_stacktraces([ current_search_stacktrace() ]) if $self;
-
-    return
-      wantarray
-        ? @ret
-        : defined wantarray
-          ? $self
-          : ();
-  };
-}
-
 # wrap all traced methods
-foreach my $method (@traced_methods) {
+foreach my $method (@traced_resultset_methods, @other_traced_methods) {
   my $orig_method = \&$method;
   monkeypatch $method => sub {
     my $self = shift;
 
-    my $tracers_stacktrace_captured = $self->_tracers_stacktrace_captured;
-    local $self->{_tracers_stacktrace_captured} = 1;
+    my $self_isa_dbic_resultset =
+      blessed($self) && $self->isa('DBIx::Class::ResultSet');
+
+    my $tracers_stacktrace_captured =
+      $self_isa_dbic_resultset && $self->_tracers_stacktrace_captured;
+    local $self->{_tracers_stacktrace_captured} = 1
+      if $self_isa_dbic_resultset;
 
     my (@ret, $ret);
     if (wantarray) {
@@ -98,9 +76,9 @@ foreach my $method (@traced_methods) {
     }
 
     $ret->_tracers_stacktraces([
-      @{$self->_tracers_stacktraces || []},
+      @{$self_isa_dbic_resultset && $self->_tracers_stacktraces || []},
       current_search_stacktrace()
-    ]) if $ret && !$tracers_stacktrace_captured;
+    ]) if blessed($ret) && $ret->isa('DBIx::Class::ResultSet');
 
     return
       wantarray
@@ -112,7 +90,7 @@ foreach my $method (@traced_methods) {
 }
 
 # wrap all methods to rewrite exceptions thrown from them
-foreach my $method (@all_methods) {
+foreach my $method (@all_resultset_methods) {
   my $orig_method = \&$method;
   monkeypatch $method => sub {
     my $self = shift;
@@ -146,6 +124,6 @@ foreach my $method (@all_methods) {
 
     return $self->$orig_method(@_);
   };
-};
+}
 
 1;
