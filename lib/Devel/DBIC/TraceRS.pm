@@ -119,8 +119,8 @@ foreach my $method (@all_methods) {
 
     return $self->$orig_method(@_) unless blessed($self);
 
-    # stop stacktraces after the outmost nested DBIx::Class::ResultSet call
-    # (b/c eg.  search() calls search_rs() internally)
+    # stop stacktrace after the outmost nested DBIx::Class::ResultSet call
+    # (b/c eg. search() calls search_rs() internally)
     my $tracers_stacktrace_appended_to_msg =
         $self->_tracers_stacktrace_appended_to_msg;
     local $self->{_tracers_stacktrace_appended_to_msg} = 1;
