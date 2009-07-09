@@ -12,12 +12,26 @@ use Scalar::Util;
 use DBIx::Class::Schema;
 use DBIx::Class::ResultSet;
 
+#
+# Monkey-patches the given sub (can be a glob or a bareword).
+#
 sub monkeypatch(*&)
 {
   no strict 'refs';
   no warnings 'redefine';
 
   *{$_[0]} = subname $_[0] => $_[1];
+}
+
+#
+# Returns the Devel::StackTrace object.
+#
+sub current_search_stacktrace()
+{
+  return Devel::StackTrace->new(
+    ignore_class => __PACKAGE__,
+    no_refs => 1,
+  );
 }
 
 DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
@@ -39,6 +53,7 @@ my @traced_methods =
   grep { /^DBIx::Class::ResultSet::(search.*|related_resultset|slice|page)$/ }
     @all_methods;
 
+# wrap constructors (they will be traced, but must be handled a bit differently)
 foreach my $method (@constructor_methods) {
   my $orig_method = \&$method;
   monkeypatch $method => sub {
@@ -53,9 +68,7 @@ foreach my $method (@constructor_methods) {
       $proto->$orig_method(@_);
     }
 
-    $self->_tracers_stacktraces([
-      current_search_stacktrace()
-    ]) if $self;
+    $self->_tracers_stacktraces([ current_search_stacktrace() ]) if $self;
 
     return
       wantarray
@@ -66,7 +79,7 @@ foreach my $method (@constructor_methods) {
   };
 }
 
-# wrap all search methods so that they are remembered
+# wrap all traced methods
 foreach my $method (@traced_methods) {
   my $orig_method = \&$method;
   monkeypatch $method => sub {
@@ -136,13 +149,5 @@ foreach my $method (@all_methods) {
     return $self->$orig_method(@_);
   };
 };
-
-sub current_search_stacktrace()
-{
-  return Devel::StackTrace->new(
-    ignore_class => __PACKAGE__,
-    no_refs => 1,
-  );
-}
 
 1;
