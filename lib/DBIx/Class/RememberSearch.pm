@@ -5,14 +5,20 @@ use warnings;
 
 use base qw(DBIx::Class);
 
+use Carp::Clan qw/^DBIx::Class/;
+
 use Devel::StackTrace;
 use Sub::Name;
 use Devel::Symdump;
 use Scalar::Util;
+use Tie::IxHash;
 
 use DBIx::Class::ResultSet;
 
-DBIx::Class::ResultSet->mk_group_accessors(simple => qw(_search_stacktrace));
+DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
+  _search_stacktraces
+  _search_stacktraces_appended
+));
 
 {
   no strict 'refs';
@@ -87,9 +93,18 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(_search_stacktrace));
       local *DBIx::Class::Schema::throw_exception = subname throw_exception => sub {
         my $schema = shift;
 
-        #FIXME output only once the same caller info (b/c eg. search calls search_rs, and new calls in search_rw, so the outer caller info is added twice)
-        $_[0] = join("\n", $_[0], map { $_->as_string } @{$self->_search_stacktrace})
-          if Scalar::Util::blessed $self;
+        if (Scalar::Util::blessed $self && $schema->stacktrace && !$self->_search_stacktraces_appended) {
+          $self->_search_stacktraces_appended(1);
+          # output only once the same caller info (b/c eg. search() calls
+          # search_rs(), so the outer caller info is added twice)
+          tie my %seen_stacktraces, 'Tie::IxHash';
+          foreach my $stacktrace (@{$self->_search_stacktraces}) {
+            @seen_stacktraces{ join("\n", map { $_->as_string } $stacktrace->frames) } = ();
+          }
+          my $stacktraces = join("\n", "", keys %seen_stacktraces);
+          $stacktraces =~ s/\n/\n\t/g;
+          $_[0] .= "\nSearch calls:$stacktraces\n";
+        }
 
         return $schema->$orig_throw_exception(@_);
       };
@@ -101,8 +116,8 @@ DBIx::Class::ResultSet->mk_group_accessors(simple => qw(_search_stacktrace));
   *DBIx::Class::ResultSet::_append_to_search_stacktrace = subname _append_to_search_stacktrace => sub {
     my $self = shift;
 
-    $self->_search_stacktrace([
-      @{$self->_search_stacktrace || []},
+    $self->_search_stacktraces([
+      @{$self->_search_stacktraces || []},
       Devel::StackTrace->new(
         frame_filter => sub { shift->{caller}->[0] !~ /^DBIx::Class/ },
         no_refs => 1,
