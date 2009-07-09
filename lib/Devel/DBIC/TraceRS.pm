@@ -1,4 +1,4 @@
-package Devel::DBIC::TraceRs;
+package Devel::DBIC::TraceRS;
 
 use strict;
 use warnings;
