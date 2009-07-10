@@ -1,5 +1,9 @@
 package Devel::DBIC::TraceRS;
 
+#FIXME tests
+#FIXME documentation
+#FIXME module build
+
 use strict;
 use warnings;
 
