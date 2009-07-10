@@ -1,8 +1,6 @@
 package Devel::DBIC::TraceRS;
 
 #FIXME tests
-#FIXME documentation
-#FIXME module build
 
 use strict;
 use warnings;
@@ -23,7 +21,22 @@ This is ALPHA SOFTWARE. Use at your own risk. Features may change.
 
 =head1 DESCRIPTION
 
+When you pass L<DBIx::Class::ResultSet> instances between different parts of
+your code, the actual place where it executes the SQL query can be very far
+from the place where the resultset was built up. And if you make a mistake
+while building up the resultset object (eg. a typo in a search condition or a
+missing join), the error is not discovered until DBIC runs the generated SQL.
+Then, sometimes, it's hard to tell at first glance where the actual error is.
+Well, a tinge of action at a distance.
 
+This is where this module comes to the rescue.
+
+If you C<use> this module, every L<DBIx::Class::ResultSet> instance remembers
+all calls that led to its current state (all relevant calls in the process of
+'building up' the resultset). When any method called on the resultset throws an
+exception, and C<DBIx::Class::Schema/stacktrace> is enabled, the list of
+stacktraces of those build-up calls are appended to the exception message. See
+the L<EXAMPLES>.
 
 =head1 METHODS
 
@@ -144,6 +157,73 @@ foreach my $method (@all_resultset_methods) {
 1;
 
 __END__
+
+=head1 EXAMPLES
+
+=head2 The demo code
+
+  #!/usr/bin/env perl 
+
+  {
+    package Foo;
+
+    use strict;
+    use warnings;
+
+    sub new
+    {
+      my ($class, $rs) = (shift, @_);
+
+      return bless { rs => $_[0] }, $class;
+    }
+
+    sub search_for
+    {
+      my ($self, $id) = (shift, @_);
+
+      return $self->{rs}->search({ aartistid => $id });
+    }
+  }
+
+  use strict;
+  use warnings;
+
+  use MyDb::Schema;
+
+  my $schema = MyDb::Schema->connect("dbi:SQLite:tmp/my.db");
+  $schema->stacktrace(1);
+
+  my $foo = Foo->new($schema->resultset("Artist"));
+
+  my $rs = $foo->search_for(1)->slice(0, 5);
+
+  while (my $artist = $rs->next) {
+    # ...
+  }
+
+=head2 The stack trace without Devel::DBIC::TraceRS
+
+  DBI Exception: DBD::SQLite::db prepare_cached failed: no such column: aartistid [for Statement "SELECT me.artistid, me.name FROM artist me WHERE ( aartistid = ? ) LIMIT 6"] at /usr/local/share/perl/5.10.0/DBIx/Class/Schema.pm line 1010
+    DBIx::Class::Schema::throw_exception('MyDb::Schema=HASH(0x817f760)', 'DBI Exception: DBD::SQLite::db prepare_cached failed: no such...') called at /usr/local/share/perl/5.10.0/DBIx/Class/Storage.pm line 122
+    ... (removed uninteresting lines)
+    DBIx::Class::ResultSet::next('DBIx::Class::ResultSet=HASH(0x862ff30)') called at demo.pl line 35
+
+=head2 The stack trace using Devel::DBIC::TraceRS
+
+
+  DBI Exception: DBD::SQLite::db prepare_cached failed: no such column: aartistid [for Statement "SELECT me.artistid, me.name FROM artist me WHERE ( aartistid = ? ) LIMIT 6"]
+  [ +- search calls ----
+    | DBIx::Class::Schema::resultset('MyDb::Schema=HASH(0x817f760)', 'Artist') called at demo.pl line 31
+    | ---
+    | DBIx::Class::ResultSet::search('DBIx::Class::ResultSet=HASH(0x8652640)', 'HASH(0x8545600)') called at demo.pl line 20
+    | Foo::search_for('Foo=HASH(0x8676e28)', 1) called at demo.pl line 33
+    | ---
+    | DBIx::Class::ResultSet::slice('DBIx::Class::ResultSet=HASH(0x867d5a0)', 0, 5) called at demo.pl line 33
+    +------------------- ] at /usr/local/share/perl/5.10.0/DBIx/Class/Schema.pm line 1010
+    DBIx::Class::Schema::throw_exception('MyDb::Schema=HASH(0x817f760)', 'DBI Exception: DBD::SQLite::db prepare_cached failed: no such...') called at lib/Devel/DBIC/TraceRS.pm line 148
+    ... (removed uninteresting lines)
+    DBIx::Class::ResultSet::next('DBIx::Class::ResultSet=HASH(0x86808f8)') called at demo.pl line 35
+
 
 =head1 BUGS, CAVEATS AND NOTES
 
