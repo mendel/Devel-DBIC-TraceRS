@@ -25,7 +25,9 @@ use DBIx::Class::ResultSource;
 sub current_search_stacktrace()
 {
   return Devel::StackTrace->new(
-    ignore_class => [__PACKAGE__, qw(Context::Preserve Devel::MonkeyPatch)],
+    ignore_class => [
+      __PACKAGE__, qw(Context::Preserve Devel::MonkeyPatch::Method)
+    ],
     no_refs => 1,
   );
 }
