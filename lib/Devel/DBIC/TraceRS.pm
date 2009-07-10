@@ -12,6 +12,7 @@ use Sub::Name;
 use Devel::Symdump;
 use Scalar::Util qw(blessed);
 use Context::Preserve;
+use Devel::MonkeyPatch;
 
 # make sure they are loaded so that we can monkey-patch them
 use DBIx::Class::Schema;
@@ -19,23 +20,12 @@ use DBIx::Class::ResultSet;
 use DBIx::Class::ResultSource;
 
 #
-# Monkey-patches the given sub (can be a glob or a bareword).
-#
-sub monkeypatch(*&)
-{
-  no strict 'refs';
-  no warnings 'redefine';
-
-  *{$_[0]} = subname +(ref $_[0] ? *{$_[0]} : $_[0]) => $_[1];
-}
-
-#
 # Returns the Devel::StackTrace object.
 #
 sub current_search_stacktrace()
 {
   return Devel::StackTrace->new(
-    ignore_class => [__PACKAGE__, qw(Context::Preserve)],
+    ignore_class => [__PACKAGE__, qw(Context::Preserve Devel::MonkeyPatch)],
     no_refs => 1,
   );
 }
@@ -61,7 +51,6 @@ my @other_traced_methods = qw(
 
 # wrap all traced methods so we can capture the stacktrace
 foreach my $method (@traced_resultset_methods, @other_traced_methods) {
-  my $orig_method = \&$method;
   monkeypatch $method => sub {
     my $self = shift;
     my $args = \@_;
@@ -76,7 +65,7 @@ foreach my $method (@traced_resultset_methods, @other_traced_methods) {
     local $self->{_tracers_stacktrace_captured} = 1
       if $self_isa_dbic_resultset;
 
-    return preserve_context { $self->$orig_method(@$args) }
+    return preserve_context { $self->original::method(@$args) }
       after => sub {
         my ($ret) = @_;
 
@@ -90,37 +79,39 @@ foreach my $method (@traced_resultset_methods, @other_traced_methods) {
 
 # wrap all methods to rewrite exceptions thrown from them
 foreach my $method (@all_resultset_methods) {
-  my $orig_method = \&$method;
   monkeypatch $method => sub {
     my $self = shift;
 
-    return $self->$orig_method(@_) unless blessed($self);
+    if (blessed($self) && !$self->_tracers_stacktrace_appended_to_msg) {
+      # do not append the stacktrace to the message more than once
+      local $self->{_tracers_stacktrace_appended_to_msg} = 1;
 
-    my $orig_throw_exception = \&DBIx::Class::Schema::throw_exception;
-    monkeypatch local *DBIx::Class::Schema::throw_exception => sub {
-      my $schema = shift;
+      local *DBIx::Class::Schema::throw_exception =
+        \&DBIx::Class::Schema::throw_exception;
+      monkeypatch *DBIx::Class::Schema::throw_exception => sub {
+        my $schema = shift;
 
-      if (!blessed($_[0]) && $schema->stacktrace) {
-        my $stacktraces = join("\n---\n",
-          map {
-            join("\n", map { $_->as_string } $_->frames)
-          } @{$self->_tracers_stacktraces}
-        );
-        $stacktraces =~ s/^/  | /mg;
+        if (!blessed($_[0]) && $schema->stacktrace) {
+          my $stacktraces = join("\n---\n",
+            map {
+              join("\n", map { $_->as_string } $_->frames)
+            } @{$self->_tracers_stacktraces}
+          );
+          $stacktraces =~ s/^/  | /mg;
 
-        $_[0] .= "\n"
-               . "[ +- search calls ----\n"
-               . "$stacktraces\n"
-               . "  +------------------- ]";
-      }
+          $_[0] .= "\n"
+                 . "[ +- search calls ----\n"
+                 . "$stacktraces\n"
+                 . "  +------------------- ]";
+        }
 
-      return $schema->$orig_throw_exception(@_);
-    } if !$self->_tracers_stacktrace_appended_to_msg;
+        return $schema->original::method(@_);
+      };
 
-    # do not append the stacktrace to the message more than once
-    local $self->{_tracers_stacktrace_appended_to_msg} = 1;
-
-    return $self->$orig_method(@_);
+      return $self->original::method(@_);
+    } else {
+      return $self->original::method(@_);
+    }
   };
 }
 
