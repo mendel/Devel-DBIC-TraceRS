@@ -7,6 +7,7 @@ use Devel::StackTrace;
 use Sub::Name;
 use Devel::Symdump;
 use Scalar::Util qw(blessed);
+use Context::Preserve;
 
 # make sure they are loaded so that we can monkey-patch them
 use DBIx::Class::Schema;
@@ -30,7 +31,7 @@ sub monkeypatch(*&)
 sub current_search_stacktrace()
 {
   return Devel::StackTrace->new(
-    ignore_class => __PACKAGE__,
+    ignore_class => [__PACKAGE__, qw(Context::Preserve)],
     no_refs => 1,
   );
 }
@@ -59,6 +60,7 @@ foreach my $method (@traced_resultset_methods, @other_traced_methods) {
   my $orig_method = \&$method;
   monkeypatch $method => sub {
     my $self = shift;
+    my $args = \@_;
 
     my $self_isa_dbic_resultset =
       blessed($self) && $self->isa('DBIx::Class::ResultSet');
@@ -70,26 +72,15 @@ foreach my $method (@traced_resultset_methods, @other_traced_methods) {
     local $self->{_tracers_stacktrace_captured} = 1
       if $self_isa_dbic_resultset;
 
-    my (@ret, $ret);
-    if (wantarray) {
-      @ret = $self->$orig_method(@_);
-    } elsif (defined wantarray) {
-      $ret = $self->$orig_method(@_);
-    } else {
-      $self->$orig_method(@_);
-    }
+    return preserve_context { $self->$orig_method(@$args) }
+      after => sub {
+        my ($ret) = @_;
 
-    $ret->_tracers_stacktraces([
-      @{$self_isa_dbic_resultset && $self->_tracers_stacktraces || []},
-      current_search_stacktrace()
-    ]) if blessed($ret) && $ret->isa('DBIx::Class::ResultSet');
-
-    return
-      wantarray
-        ? @ret
-        : defined wantarray
-          ? $ret
-          : ();
+        $ret->_tracers_stacktraces([
+          @{$self_isa_dbic_resultset && $self->_tracers_stacktraces || []},
+          current_search_stacktrace()
+        ]) if blessed($ret) && $ret->isa('DBIx::Class::ResultSet');
+      };
   };
 }
 
