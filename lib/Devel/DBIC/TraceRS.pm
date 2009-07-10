@@ -227,12 +227,19 @@ __END__
 
 =head1 BUGS, CAVEATS AND NOTES
 
-=head2 Performance
+=head2 Performance and stability
 
 It monkey-patches all methods of L<DBIx::Class::ResultSet> and some methods of
 other L<DBIx::Class> parts. Consequently it hurts performance and may make the
-code unstable. This module is only meant to be used while you're developing the
-code. B<Do not use this module in production!>
+code unstable.
+
+This module is only meant to be used while you're developing the code. B<Do not
+use this module in production!>
+
+=head2 Future DBIx::Class versions
+
+Since this module performs its job by wrapping methods and intruding into
+internals of L<DBIx::Class>, future L<DBIx::Class> releases may break it.
 
 =head1 SEE ALSO
 
