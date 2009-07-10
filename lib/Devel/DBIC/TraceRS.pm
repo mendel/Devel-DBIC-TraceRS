@@ -12,7 +12,7 @@ use Sub::Name;
 use Devel::Symdump;
 use Scalar::Util qw(blessed);
 use Context::Preserve;
-use Devel::MonkeyPatch;
+use Devel::MonkeyPatch::Method;
 
 # make sure they are loaded so that we can monkey-patch them
 use DBIx::Class::Schema;
