@@ -11,6 +11,7 @@ use Scalar::Util qw(blessed);
 # make sure they are loaded so that we can monkey-patch them
 use DBIx::Class::Schema;
 use DBIx::Class::ResultSet;
+use DBIx::Class::ResultSource;
 
 #
 # Monkey-patches the given sub (can be a glob or a bareword).
@@ -50,6 +51,7 @@ my @traced_resultset_methods =
 
 my @other_traced_methods = qw(
   DBIx::Class::Schema::resultset
+  DBIx::Class::ResultSource::resultset
 );
 
 # wrap all traced methods so we can capture the stacktrace
