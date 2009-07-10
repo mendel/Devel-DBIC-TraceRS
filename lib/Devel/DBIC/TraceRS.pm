@@ -70,9 +70,9 @@ sub current_search_stacktrace()
 }
 
 DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
+  _tracers_stacktrace_captured
   _tracers_stacktraces
   _tracers_stacktrace_appended_to_msg
-  _tracers_stacktrace_captured
 ));
 
 my @all_resultset_methods =
