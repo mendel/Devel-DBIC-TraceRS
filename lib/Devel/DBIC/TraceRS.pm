@@ -7,6 +7,30 @@ package Devel::DBIC::TraceRS;
 use strict;
 use warnings;
 
+use 5.005;
+
+=head1 NAME
+
+Devel::DBIC::TraceRS - When it blows up, let me know where a given DBIx::Class::ResultSet was built.
+
+=head1 SYNOPSIS
+
+  perl -MDevel::DBIC::TraceRS somescript.pl
+
+=head1 DISCLAIMER
+
+This is ALPHA SOFTWARE. Use at your own risk. Features may change.
+
+=head1 DESCRIPTION
+
+
+
+=head1 METHODS
+
+=cut
+
+our $VERSION = 0.01;
+
 use Devel::StackTrace;
 use Sub::Name;
 use Devel::Symdump;
@@ -118,3 +142,37 @@ foreach my $method (@all_resultset_methods) {
 }
 
 1;
+
+__END__
+
+=head1 BUGS, CAVEATS AND NOTES
+
+=head2 Performance
+
+It monkey-patches all methods of L<DBIx::Class::ResultSet> and some methods of
+other L<DBIx::Class> parts. Consequently it hurts performance and may make the
+code unstable. This module is only meant to be used while you're developing the
+code. B<Do not use this module in production!>
+
+=head1 SEE ALSO
+
+L<DBIx::Class>, L<Devel::StackTrace>
+
+=head1 SUPPORT
+
+Please submit bugs to the CPAN RT system at
+http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Devel%3A%3ADBIC%3A%3ATraceRS or
+via email at bug-devel-dbic-tracers@rt.cpan.org.
+
+=head1 AUTHOR
+
+Norbert Buchmüller <norbi@nix.hu>
+
+=head1 COPYRIGHT
+
+Copyright 2009 Norbert Buchmüller.
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+=cut
