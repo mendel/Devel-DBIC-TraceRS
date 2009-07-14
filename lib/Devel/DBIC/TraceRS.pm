@@ -38,7 +38,7 @@ exception, and C<DBIx::Class::Schema/stacktrace> is enabled, the list of
 stacktraces of those build-up calls are appended to the exception message. See
 the L<EXAMPLES>.
 
-=head1 METHODS
+=head1 VERSION
 
 =cut
 
@@ -55,19 +55,6 @@ use Devel::MonkeyPatch::Sub qw(wrap_sub);
 use DBIx::Class::Schema;
 use DBIx::Class::ResultSet;
 use DBIx::Class::ResultSource;
-
-#
-# Returns the Devel::StackTrace object.
-#
-sub current_search_stacktrace()
-{
-  return Devel::StackTrace->new(
-    ignore_class => [
-      __PACKAGE__, qw(Context::Preserve Devel::MonkeyPatch::Sub)
-    ],
-    no_refs => 1,
-  );
-}
 
 DBIx::Class::ResultSet->mk_group_accessors(simple => qw(
   _tracers_stacktrace_captured
@@ -87,6 +74,10 @@ my @other_traced_methods = qw(
   DBIx::Class::Schema::resultset
   DBIx::Class::ResultSource::resultset
 );
+
+=head1 METHODS
+
+=cut
 
 # wrap all traced methods so we can capture the stacktrace
 foreach my $method (@traced_resultset_methods, @other_traced_methods) {
@@ -110,7 +101,12 @@ foreach my $method (@traced_resultset_methods, @other_traced_methods) {
 
         $ret->_tracers_stacktraces([
           @{$self_isa_dbic_resultset && $self->_tracers_stacktraces || []},
-          current_search_stacktrace()
+          Devel::StackTrace->new(
+            ignore_class => [
+              __PACKAGE__, qw(Context::Preserve Devel::MonkeyPatch::Sub)
+            ],
+            no_refs => 1,
+          ),
         ]) if blessed($ret) && $ret->isa('DBIx::Class::ResultSet');
       };
   };
