@@ -1,6 +1,22 @@
 package Devel::DBIC::TraceRS;
 
 #FIXME tests
+# * $schema->resultset('...')
+# * $result_source->resultset
+# * new()
+# * $rs->search(...)
+# * $rs->search_rs(...)
+# * $rs->search_literal(...)
+# * $rs->search_like(...)
+# * $rs->search_related(...)
+# * $rs->search_related_rs(...)
+# * $rs->related_resultset(...)
+# * $rs-><one_to_many-accessor>
+# * $rs-><one_to_many-accessor>_rs
+# * $rs-><many_to_many-accessor>
+# * $rs-><many_to_many-accessor>_rs
+# * $rs->slice(...)
+# * $rs->page(...)
 
 use strict;
 use warnings;
