@@ -130,7 +130,8 @@ foreach my $method (@traced_resultset_methods, @other_traced_methods) {
             ],
             no_refs => 1,
           ),
-        ]) if blessed($ret) && $ret->isa('DBIx::Class::ResultSet');
+        ]) if blessed($ret) && $ret->isa('DBIx::Class::ResultSet') &&
+              !$tracers_stacktrace_captured;
       };
   };
 }
