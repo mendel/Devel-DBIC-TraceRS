@@ -239,7 +239,7 @@ internals of L<DBIx::Class>, future L<DBIx::Class> releases may break it.
 
 =head1 SEE ALSO
 
-L<DBIx::Class>, L<Devel::StackTrace>
+L<DBIx::Class>, L<Devel::StackTrace>, L<Devel::MonkeyPatch::Sub>
 
 =head1 SUPPORT
 
