@@ -45,7 +45,6 @@ the L<EXAMPLES>.
 our $VERSION = 0.01;
 
 use Devel::StackTrace;
-use Sub::Name;
 use Devel::Symdump;
 use Scalar::Util qw(blessed);
 use Context::Preserve;
@@ -112,7 +111,7 @@ foreach my $method (@traced_resultset_methods, @other_traced_methods) {
   };
 }
 
-# wrap all methods to rewrite exceptions thrown from them
+# wrap all methods to rewrite the message of the exceptions thrown from them
 foreach my $method (@all_resultset_methods) {
   wrap_sub $method => sub {
     my $self = shift;
